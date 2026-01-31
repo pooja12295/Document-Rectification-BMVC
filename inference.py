@@ -10,6 +10,7 @@ import cv2
 import os
 from PIL import Image
 import argparse
+from tqdm import tqdm
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -61,6 +62,8 @@ def reload_rec_model(model, path="", device="cpu"):
 def rec(seg_model_path, rec_model_path, distorrted_path, save_path, device="cpu"):
     # distorted images folder 
     img_list = os.listdir(distorrted_path)
+    total_inputs = len(img_list)
+    rectified_count = 0
 
     # rectified images
     if not os.path.exists(save_path):
@@ -76,9 +79,9 @@ def rec(seg_model_path, rec_model_path, distorrted_path, save_path, device="cpu"
 
     net.eval()
 
-    for img_path in img_list:
+    for img_path in tqdm(img_list, desc="Rectifying images", unit="img"):
         name = img_path.split('.')[-2] 
-        img_path = distorrted_path + img_path 
+        img_path = os.path.join(distorrted_path, img_path)
 
         im_ori = np.array(Image.open(img_path))[:, :, :3] / 255.
         h, w, _ = im_ori.shape
@@ -97,7 +100,11 @@ def rec(seg_model_path, rec_model_path, distorrted_path, save_path, device="cpu"
             bm1 = cv2.blur(bm1, (3, 3))
             lbl = torch.from_numpy(np.stack([bm0, bm1], axis=2)).unsqueeze(0)  # h * w * 2
             out = F.grid_sample(torch.from_numpy(im_ori).permute(2, 0, 1).unsqueeze(0).float(), lbl, align_corners=True)
-            cv2.imwrite(save_path + name + '_rec' + '.png', (((out[0]*255).permute(1, 2, 0).numpy())[:,:,::-1]).astype(np.uint8))
+            save_file = os.path.join(save_path, name + '_rec' + '.png')
+            cv2.imwrite(save_file, (((out[0]*255).permute(1, 2, 0).numpy())[:,:,::-1]).astype(np.uint8))
+            rectified_count += 1
+
+    print(f"Inputs: {total_inputs}, Rectified: {rectified_count}, Saved to: {save_path}")
 
 
 def main():
